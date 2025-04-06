@@ -20,7 +20,7 @@ st.markdown("""
             text-align: center;
             margin-top: 20px;
         }
-        
+
         /* Estilo para o subtítulo */
         .subtitle {
             font-size: 18px;
@@ -75,7 +75,8 @@ sidebar_option = st.sidebar.radio("Escolha uma opção:", ("Enviar Atestado", "I
 if sidebar_option == "Enviar Atestado":
     # Título e subtítulo
     st.markdown('<p class="title">Atendimento ao Cliente</p>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Envie o seu atestado médico em formato de imagem para análise.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Envie o seu atestado médico em formato de imagem para análise.</p>',
+                unsafe_allow_html=True)
 
     # Caixa de upload de arquivo
     uploaded_file = st.file_uploader("Escolha um arquivo (JPEG, PNG, JPG)", type=["jpg", "jpeg", "png"])
@@ -90,7 +91,7 @@ if sidebar_option == "Enviar Atestado":
 
         # Tenta ler o texto da imagem utilizando o pytesseract (OCR)
         text = pytesseract.image_to_string(image)
-        
+
         if text:
             st.subheader("Texto Detectado na Imagem:")
             st.write(text)
@@ -100,7 +101,7 @@ if sidebar_option == "Enviar Atestado":
         # Salva o arquivo em disco
         with open("atestado_enviado.jpg", "wb") as f:
             f.write(uploaded_file.getbuffer())
-        
+
         st.write("O seu atestado foi salvo com sucesso.")
     st.markdown('</div>', unsafe_allow_html=True)
 
