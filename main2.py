@@ -1,27 +1,26 @@
+import time
 import streamlit as st
+import requests
 from PIL import Image
 import pytesseract
+import os
+import json
 
+# Caminho para simular persistência da sessão
+SESSION_FILE = "session.json"
 
-# Função para autenticar o usuário
-def check_login(username, password):
-    # Dados de login simples (usuário: MABASIL, senha: 181004)
-    if username == "MABASIL" and password == "181004":
-        return True
-    return False
-
-
-# Configuração do caminho do Tesseract (caso necessário, no Windows)
-# Tente descomentar a linha abaixo e forneça o caminho correto do tesseract no seu sistema
+# Configuração do Tesseract (caso necessário no Windows)
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # Configuração da página
 st.set_page_config(page_title="Atendimento ao Cliente", page_icon=":clipboard:", layout="wide")
 
-# Função para adicionar estilo CSS
+# Base URL da API
+API_URL = "http://127.0.0.1:5000"
+
+# Estilo CSS
 st.markdown("""
     <style>
-        /* Estilo para o título */
         .title {
             font-size: 36px;
             font-weight: bold;
@@ -29,16 +28,12 @@ st.markdown("""
             text-align: center;
             margin-top: 20px;
         }
-
-        /* Estilo para o subtítulo */
         .subtitle {
             font-size: 18px;
             color: #666666;
             text-align: center;
             margin-bottom: 40px;
         }
-
-        /* Estilo para o container do upload */
         .upload-container {
             background-color: #f7f7f7;
             border-radius: 15px;
@@ -47,16 +42,12 @@ st.markdown("""
             margin: 0 auto;
             width: 70%;
         }
-
-        /* Estilo para a imagem do atestado */
         .uploaded-image {
             border: 2px solid #ddd;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             width: 100%;
         }
-
-        /* Estilo para mensagens de sucesso */
         .success-message {
             color: #28a745;
             font-size: 18px;
@@ -64,8 +55,6 @@ st.markdown("""
             text-align: center;
             margin-top: 20px;
         }
-
-        /* Rodapé */
         .footer {
             text-align: center;
             margin-top: 40px;
@@ -76,56 +65,83 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# Página de login
+# ---------------------- Sessão ----------------------
+
+def salvar_sessao(email):
+    with open(SESSION_FILE, "w") as f:
+        json.dump({"logged_in": True, "email": email}, f)
+
+def carregar_sessao():
+    if os.path.exists(SESSION_FILE):
+        with open(SESSION_FILE, "r") as f:
+            dados = json.load(f)
+            return dados.get("logged_in", False), dados.get("email")
+    return False, None
+
+def limpar_sessao():
+    if os.path.exists(SESSION_FILE):
+        os.remove(SESSION_FILE)
+
+
+# ---------------------- Login API ----------------------
+
+def fazer_login(email, senha):
+    try:
+        resposta = requests.patch(
+            f"{API_URL}/usuarios/login",
+            json={"email": email, "senha": senha}
+        )
+        if resposta.status_code == 200:
+            return True, resposta.json()
+        else:
+            return False, resposta.json()
+    except Exception as e:
+        return False, {"error": str(e)}
+
+
+# ---------------------- Login Page ----------------------
+
 def login_page():
     st.markdown('<p class="title">Página de Login</p>', unsafe_allow_html=True)
 
-    # Campos de login
-    username = st.text_input("Usuário")
-    password = st.text_input("Senha", type="password")
+    email = st.text_input("E-mail")
+    senha = st.text_input("Senha", type="password")
 
-    # Botão de login
     if st.button("Entrar"):
-        if check_login(username, password):
-            st.session_state.logged_in = True  # Marca como logado
+        sucesso, resposta = fazer_login(email, senha)
+        if sucesso:
+            salvar_sessao(email)
+            st.success("Login realizado com sucesso! Redirecionando...")
+            time.sleep(2)
+            st.rerun()
         else:
-            st.error("Credenciais inválidas. Tente novamente.")
+            st.error(resposta.get("error", "Falha ao realizar login."))
 
 
-# Verifica se o usuário está logado
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
+# ---------------------- Página Principal ----------------------
 
-# Exibe a tela de login se o usuário não estiver logado
-if not st.session_state.logged_in:
-    login_page()
-
-else:
-    # Tela após login
-    # Sidebar
+def pagina_principal():
     st.sidebar.title("Boas vindas!")
     st.sidebar.subheader("O que você deseja fazer?")
     sidebar_option = st.sidebar.radio("Escolha uma opção:", ("Enviar Atestado", "Informações"))
 
-    # Lógica para cada opção da sidebar
-    if sidebar_option == "Enviar Atestado":
-        # Título e subtítulo
-        st.markdown('<p class="title">Atendimento ao Cliente</p>', unsafe_allow_html=True)
-        st.markdown('<p class="subtitle">Envie o seu atestado médico em formato de imagem para análise.</p>',
-                    unsafe_allow_html=True)
+    # Inicializa estados
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
+    if "email" not in st.session_state:
+        st.session_state["email"] = ""
 
-        # Caixa de upload de arquivo
+    if sidebar_option == "Enviar Atestado":
+        st.markdown('<p class="title">Atendimento ao Cliente</p>', unsafe_allow_html=True)
+        st.markdown('<p class="subtitle">Envie o seu atestado médico em formato de imagem para análise.</p>', unsafe_allow_html=True)
+
         uploaded_file = st.file_uploader("Escolha um arquivo (JPEG, PNG, JPG)", type=["jpg", "jpeg", "png"])
 
         if uploaded_file is not None:
-            # Exibe a imagem enviada
             image = Image.open(uploaded_file)
             st.image(image, caption="Atestado Enviado", output_format="PNG", channels="RGB")
-
-            # Exibe mensagem de sucesso
             st.markdown('<p class="success-message">Arquivo enviado com sucesso!</p>', unsafe_allow_html=True)
 
-            # Tenta ler o texto da imagem utilizando o pytesseract (OCR)
             text = pytesseract.image_to_string(image)
 
             if text:
@@ -134,14 +150,12 @@ else:
             else:
                 st.warning("Nenhum texto foi detectado na imagem.")
 
-            # Salva o arquivo em disco
             with open("atestado_enviado.jpg", "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
             st.write("O seu atestado foi salvo com sucesso.")
 
     elif sidebar_option == "Informações":
-        # Exibe informações na área principal
         st.markdown('<p class="title">Informações</p>', unsafe_allow_html=True)
         st.write(
             "Aqui você pode enviar seu atestado médico para análise. O atestado será verificado por nossa equipe e você será "
@@ -149,5 +163,15 @@ else:
             "atendimentos."
         )
 
-    # Rodapé
     st.markdown('<div class="footer">© 2025 Trackpoint | Todos os direitos reservados</div>', unsafe_allow_html=True)
+
+
+# ---------------------- Roteamento ----------------------
+
+logado, email = carregar_sessao()
+if logado:
+    st.session_state["logged_in"] = True
+    st.session_state["email_usuario"] = email
+    pagina_principal()
+else:
+    login_page()
